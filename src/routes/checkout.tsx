@@ -14,7 +14,7 @@ import {
   calculateShipping, 
   calculateTotal 
 } from "@/lib/cart-calculations";
-import { createRazorpayOrder } from "@/lib/razorpay.server";
+import { createRazorpayOrder } from "@/lib/razorpay.fns";
 
 type Search = { coupon?: string; discount?: number };
 

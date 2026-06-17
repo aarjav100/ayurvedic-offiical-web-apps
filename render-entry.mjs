@@ -3,8 +3,30 @@
 // Usage: node render-entry.mjs
 
 import { createServer } from "node:http";
+import { join, resolve, extname } from "node:path";
+import { promises as fs, createReadStream } from "node:fs";
 
 const port = parseInt(process.env.PORT || "10000", 10);
+
+const MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".txt": "text/plain; charset=utf-8",
+};
 
 async function start() {
   const mod = await import("./dist/server/server.js");
@@ -21,10 +43,41 @@ async function start() {
 
   const server = createServer(async (nodeReq, nodeRes) => {
     try {
-      // Build a web-standard Request from the Node.js request
       const host = nodeReq.headers.host || `localhost:${port}`;
       const url = new URL(nodeReq.url || "/", `http://${host}`);
+      const decodedPath = decodeURIComponent(url.pathname);
 
+      // Check if this is a static asset request in dist/client
+      const clientDir = resolve("dist/client");
+      const safePath = resolve(clientDir, decodedPath.startsWith("/") ? decodedPath.slice(1) : decodedPath);
+
+      if (safePath.startsWith(clientDir)) {
+        try {
+          const stats = await fs.stat(safePath);
+          if (stats.isFile() && !safePath.endsWith("index.html")) {
+            const ext = extname(safePath).toLowerCase();
+            const contentType = MIME_TYPES[ext] || "application/octet-stream";
+            
+            const headers = {
+              "Content-Type": contentType,
+              "Content-Length": stats.size,
+            };
+
+            // Vite assets are hashed and can be cached aggressively
+            if (decodedPath.startsWith("/assets/")) {
+              headers["Cache-Control"] = "public, max-age=31536000, immutable";
+            }
+
+            nodeRes.writeHead(200, headers);
+            createReadStream(safePath).pipe(nodeRes);
+            return;
+          }
+        } catch (e) {
+          // File doesn't exist or is not readable, fallback to SSR handler
+        }
+      }
+
+      // Build a web-standard Request from the Node.js request
       const headers = new Headers();
       for (const [key, val] of Object.entries(nodeReq.headers)) {
         if (val)

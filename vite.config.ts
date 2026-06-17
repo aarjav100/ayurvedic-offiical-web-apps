@@ -6,20 +6,17 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 const isRender = process.env.RENDER === "true";
 
-// Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper)
-// for Cloudflare, but use the default Node.js server entry on Render.
+// Cloudflare: use custom server.ts entry + cloudflare() plugin
+// Render:     use node-server preset → produces .output/server/index.mjs
 export default defineConfig({
   plugins: [
     tsconfigPaths(),
     tailwindcss(),
     tanstackStart(
       isRender
-        ? {}
-        : {
-            server: { entry: "server" },
-          }
+        ? { server: { preset: "node-server" } }
+        : { server: { entry: "server" } }
     ),
     (!isRender && process.env.NODE_ENV === "production") ? cloudflare() : null,
   ].filter(Boolean) as any,
 });
-

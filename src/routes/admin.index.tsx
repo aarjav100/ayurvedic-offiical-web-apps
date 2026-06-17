@@ -11,15 +11,21 @@ function Dashboard() {
   const [orders, setOrders] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("products").select("id, stock").then(({ data }) => setProducts(data ?? []));
+    supabase.from("products").select("id, stock, status").then(({ data }) => setProducts(data ?? []));
     supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50).then(({ data }) => setOrders(data ?? []));
   }, []);
 
   const stats = useMemo(() => ({
-    revenue: orders.reduce((s, o) => s + Number(o.total), 0),
-    orderCount: orders.length,
-    productCount: products.length,
-    pending: orders.filter((o) => o.status === "pending").length,
+    // Fix 2: Revenue should only count completed/confirmed/delivered orders
+    revenue: orders
+      .filter((o) => ["completed", "delivered", "confirmed"].includes(o.status))
+      .reduce((s, o) => s + Number(o.total), 0),
+    // Fix 3: Orders count should exclude cart sessions
+    orderCount: orders.filter((o) => o.status !== "cart").length,
+    // Fix 1: Products count showing all 'active' products
+    productCount: products.filter((p) => p.status === "active").length,
+    // Fix 4: Pending orders logic
+    pending: orders.filter((o) => o.status === "pending" && o.order_placed === true).length,
     lowStock: products.filter((p) => p.stock < 10).length,
   }), [orders, products]);
 

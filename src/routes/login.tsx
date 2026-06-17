@@ -16,18 +16,38 @@ function Login() {
   const [loading, setLoading] = useState(false);
 
   const signIn = async () => {
+    if (!email.trim() || !email.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (!password) {
+      toast.error("Password is required");
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("Welcome back!");
     nav({ to: "/" });
   };
   const signUp = async () => {
+    if (!name.trim()) {
+      toast.error("Full name is required");
+      return;
+    }
+    if (!email.trim() || !email.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: window.location.origin, data: { full_name: name } },
+      email: email.trim(), password,
+      options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } },
     });
     setLoading(false);
     if (error) return toast.error(error.message);

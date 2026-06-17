@@ -54,7 +54,19 @@ export function ProductForm({ initial, categories, mode }: { initial: ProductFor
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
-    if (!form.price || Number(form.price) <= 0) { toast.error("Valid price is required"); return; }
+    const priceNum = Number(form.price);
+    if (!form.price || isNaN(priceNum) || priceNum <= 0) { toast.error("Valid price (> 0) is required"); return; }
+    
+    let discountPriceNum: number | null = null;
+    if (form.discount_price) {
+      discountPriceNum = Number(form.discount_price);
+      if (isNaN(discountPriceNum) || discountPriceNum < 0) { toast.error("Discount price must be a valid positive number"); return; }
+      if (discountPriceNum >= priceNum) { toast.error("Discount price must be less than regular price"); return; }
+    }
+    
+    const stockNum = Number(form.stock);
+    if (isNaN(stockNum) || stockNum < 0 || !Number.isInteger(stockNum)) { toast.error("Stock must be a non-negative integer"); return; }
+
     setSaving(true);
     const payload = {
       name: form.name.trim(),

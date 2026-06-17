@@ -9,7 +9,24 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
 
+import { 
+  calculateSubtotal, 
+  calculateShipping, 
+  calculateTotal 
+} from "@/lib/cart-calculations";
+import { createRazorpayOrder } from "@/lib/razorpay.server";
+
 type Search = { coupon?: string; discount?: number };
+
+function loadScript(src: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export const Route = createFileRoute("/checkout")({
   validateSearch: (s: Record<string, unknown>): Search => ({
@@ -33,9 +50,9 @@ function Checkout() {
     supabase.from("cart_items").select("*, products(*)").eq("user_id", user.id).then(({ data }) => setItems(data ?? []));
   }, [user, nav]);
 
-  const subtotal = items.reduce((s, i) => s + (i.products.discount_price ?? i.products.price) * i.quantity, 0);
-  const shipping = subtotal >= 499 ? 0 : 49;
-  const total = Math.max(0, subtotal - discount) + shipping;
+  const subtotal = calculateSubtotal(items);
+  const shipping = calculateShipping(subtotal);
+  const total = calculateTotal(subtotal, discount, shipping);
 
   const placeOrder = async () => {
     if (!user) return;
@@ -44,20 +61,90 @@ function Checkout() {
     }
     if (items.length === 0) { toast.error("Cart is empty"); return; }
     setPlacing(true);
-    const orderItems = items.map((i) => ({
-      product_id: i.products.id, name: i.products.name, price: i.products.discount_price ?? i.products.price, quantity: i.quantity,
-    }));
-    const { data, error } = await supabase.from("orders").insert({
-      user_id: user.id, items: orderItems, shipping_address: form, subtotal, discount, shipping, total,
-      payment_method: method, payment_status: method === "cod" ? "pending" : "pending",
-      coupon_code: coupon ?? null,
-    }).select().single();
-    if (error) { toast.error(error.message); setPlacing(false); return; }
-    await supabase.from("cart_items").delete().eq("user_id", user.id);
-    if (method !== "cod") {
-      toast.info("Online payment integration coming next — order saved as pending.");
+    
+    const { data, error } = await supabase.rpc("create_order_secure", {
+      p_shipping_address: form,
+      p_payment_method: method,
+      p_coupon_code: coupon ?? null,
+    });
+
+    if (error) { 
+      toast.error(error.message); 
+      setPlacing(false); 
+      return; 
     }
-    nav({ to: "/order/$id", params: { id: data.id } });
+
+    const result = data as any;
+    if (!result || !result.success || !result.order_id) {
+      toast.error("Failed to place order. Please try again.");
+      setPlacing(false);
+      return;
+    }
+
+    if (method === "cod") {
+      nav({ to: "/order/$id", params: { id: result.order_id } });
+      return;
+    }
+
+    // Load Razorpay SDK
+    const loaded = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
+    if (!loaded) {
+      toast.error("Failed to load Razorpay SDK. Please check your internet connection.");
+      setPlacing(false);
+      return;
+    }
+
+    try {
+      const rzpOrder = await createRazorpayOrder({ data: { orderId: result.order_id } });
+      
+      const options = {
+        key: rzpOrder.key,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        name: "Ayurveda Roots",
+        description: "Order Payment",
+        order_id: rzpOrder.id,
+        handler: async function (response: any) {
+          toast.success("Payment successful!");
+          
+          // In development, mock the webhook verification to confirm payment instantly
+          if (rzpOrder.isMock) {
+            await fetch("/api/webhook", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                order_id: result.order_id,
+                payment_id: response.razorpay_payment_id || "mock_payment_id",
+                payment_status: "paid",
+              }),
+            });
+          }
+          
+          nav({ to: "/order/$id", params: { id: result.order_id } });
+        },
+        prefill: {
+          name: form.full_name,
+          contact: form.phone,
+        },
+        theme: {
+          color: "#4A5D4E", // matched with ayurveda branding color
+        },
+        modal: {
+          ondismiss: function () {
+            toast.info("Payment cancelled. Order saved as pending.");
+            nav({ to: "/order/$id", params: { id: result.order_id } });
+          }
+        }
+      };
+
+      const paymentObject = new (window as any).Razorpay(options);
+      paymentObject.open();
+
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to initiate payment. Order saved as pending.");
+      nav({ to: "/order/$id", params: { id: result.order_id } });
+    }
   };
 
   return (

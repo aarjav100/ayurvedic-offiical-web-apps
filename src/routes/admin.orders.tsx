@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/admin/orders")({ component: AdminOrders });
 
-const STATUSES: OrderStatus[] = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
+const STATUSES: OrderStatus[] = ["pending", "confirmed", "shipped", "delivered", "completed", "cancelled"];
 const REFUND_STATUSES: RefundStatus[] = ["not_applicable", "pending", "processing", "completed", "failed"];
 const PAGE_SIZE = 8;
 
@@ -32,10 +32,16 @@ function AdminOrders() {
 
   const load = () => {
     setLoading(true);
-    supabase.from("orders").select("*").order("created_at", { ascending: false }).then(({ data }) => {
-      setOrders(data ?? []);
-      setLoading(false);
-    });
+    // Fix 3: Exclude 'cart' sessions from the orders list
+    supabase
+      .from("orders")
+      .select("*")
+      .neq("status", "cart")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setOrders(data ?? []);
+        setLoading(false);
+      });
   };
   useEffect(() => { load(); }, []);
 
@@ -123,11 +129,44 @@ function AdminOrders() {
     load();
   };
 
+  const exportCSV = () => {
+    const headers = ["Order ID", "Date", "Customer Name", "City", "State", "Pincode", "Total (INR)", "Payment Method", "Payment Status", "Status"];
+    const rows = filtered.map(o => {
+      const addr = o.shipping_address as any;
+      return [
+        o.id,
+        new Date(o.created_at).toLocaleString(),
+        `"${(addr?.full_name ?? "").replace(/"/g, '""')}"`,
+        `"${(addr?.city ?? "").replace(/"/g, '""')}"`,
+        `"${(addr?.state ?? "").replace(/"/g, '""')}"`,
+        addr?.pincode ?? "",
+        o.total,
+        o.payment_method,
+        o.payment_status,
+        o.status
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div>
-      <div>
-        <h1 className="font-display text-3xl font-semibold">Orders</h1>
-        <p className="text-sm text-muted-foreground">{filtered.length} of {orders.length} orders</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold">Orders</h1>
+          <p className="text-sm text-muted-foreground">{filtered.length} of {orders.length} orders</p>
+        </div>
+        <Button onClick={exportCSV} variant="outline">Export CSV</Button>
       </div>
 
       <div className="mt-5 grid gap-3 rounded-2xl border border-border/60 bg-card p-4 sm:grid-cols-[1fr_200px]">

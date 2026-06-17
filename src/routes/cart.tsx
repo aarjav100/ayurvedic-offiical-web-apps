@@ -9,6 +9,13 @@ import { inr } from "@/lib/format";
 import { imageForProduct } from "@/lib/product-images";
 import { toast } from "sonner";
 
+import { 
+  calculateSubtotal, 
+  calculateShipping, 
+  calculateDiscount, 
+  calculateTotal 
+} from "@/lib/cart-calculations";
+
 export const Route = createFileRoute("/cart")({ component: Cart });
 
 function Cart() {
@@ -33,9 +40,9 @@ function Cart() {
   };
   const remove = async (id: string) => { await supabase.from("cart_items").delete().eq("id", id); load(); };
 
-  const subtotal = items.reduce((s, i) => s + (i.products.discount_price ?? i.products.price) * i.quantity, 0);
-  const shipping = subtotal >= 499 || subtotal === 0 ? 0 : 49;
-  const total = Math.max(0, subtotal - discount) + shipping;
+  const subtotal = calculateSubtotal(items);
+  const shipping = calculateShipping(subtotal);
+  const total = calculateTotal(subtotal, discount, shipping);
 
   const applyCoupon = async () => {
     const code = coupon.trim().toUpperCase();
@@ -43,7 +50,11 @@ function Cart() {
     const { data } = await supabase.from("coupons").select("*").eq("code", code).eq("is_active", true).maybeSingle();
     if (!data) { toast.error("Invalid coupon"); return; }
     if (subtotal < Number(data.min_order_value)) { toast.error(`Min order ₹${data.min_order_value}`); return; }
-    const d = data.discount_type === "flat" ? Number(data.value) : Math.round(subtotal * Number(data.value) / 100);
+    const d = calculateDiscount(subtotal, {
+      value: Number(data.value),
+      discount_type: data.discount_type,
+      min_order_value: Number(data.min_order_value)
+    });
     setDiscount(d); setAppliedCoupon(code);
     toast.success(`Saved ${inr(d)}`);
   };

@@ -6,17 +6,13 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 const isRender = process.env.RENDER === "true";
 
-// Cloudflare: use custom server.ts entry + cloudflare() plugin
-// Render:     use node-server preset → produces .output/server/index.mjs
+// Both Cloudflare and Render use the same server entry (src/server.ts).
+// Cloudflare runs the Worker natively; Render uses render-entry.mjs to adapt it to Node.js HTTP.
 export default defineConfig({
   plugins: [
     tsconfigPaths(),
     tailwindcss(),
-    tanstackStart(
-      isRender
-        ? { server: { preset: "node-server" } }
-        : { server: { entry: "server" } }
-    ),
+    tanstackStart({ server: { entry: "server" } }),
     (!isRender && process.env.NODE_ENV === "production") ? cloudflare() : null,
   ].filter(Boolean) as any,
 });

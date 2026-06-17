@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export const createRazorpayOrder = createServerFn({ method: "POST" })
-  .validator((data: { orderId: string }) => data)
+  .inputValidator((data: { orderId: string }) => data)
   .handler(async ({ data: { orderId } }) => {
     // Dynamic import keeps the .server.ts module out of the client bundle
     const { supabaseAdmin } = await import(

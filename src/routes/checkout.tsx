@@ -8,6 +8,14 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 import { 
   calculateSubtotal, 
@@ -44,6 +52,8 @@ function Checkout() {
   const [form, setForm] = useState({ full_name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" });
   const [method, setMethod] = useState<"cod" | "razorpay" | "upi">("cod");
   const [placing, setPlacing] = useState(false);
+  const [upiOrder, setUpiOrder] = useState<{ id: string; total: number } | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!user) { nav({ to: "/login" }); return; }
@@ -86,6 +96,12 @@ function Checkout() {
       return;
     }
 
+    if (method === "upi") {
+      setUpiOrder({ id: result.order_id, total: total });
+      setPlacing(false);
+      return;
+    }
+
     // Load Razorpay SDK
     const loaded = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
     if (!loaded) {
@@ -97,6 +113,27 @@ function Checkout() {
     try {
       const rzpOrder = await createRazorpayOrder({ data: { orderId: result.order_id } });
       
+      // If we are in development fallback mode (mock order), bypass launching SDK
+      if (rzpOrder.isMock) {
+        toast.info("Development Mode: Simulating Razorpay payment...");
+        try {
+          await fetch("/api/webhook", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              order_id: result.order_id,
+              payment_id: rzpOrder.id,
+              payment_status: "paid",
+            }),
+          });
+          toast.success("Mock payment successful!");
+        } catch (webhookErr) {
+          console.error("[Webhook Simulation] Failed:", webhookErr);
+        }
+        nav({ to: "/order/$id", params: { id: result.order_id } });
+        return;
+      }
+
       const options = {
         key: rzpOrder.key,
         amount: rzpOrder.amount,
@@ -106,20 +143,6 @@ function Checkout() {
         order_id: rzpOrder.id,
         handler: async function (response: any) {
           toast.success("Payment successful!");
-          
-          // In development, mock the webhook verification to confirm payment instantly
-          if (rzpOrder.isMock) {
-            await fetch("/api/webhook", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                order_id: result.order_id,
-                payment_id: response.razorpay_payment_id || "mock_payment_id",
-                payment_status: "paid",
-              }),
-            });
-          }
-          
           nav({ to: "/order/$id", params: { id: result.order_id } });
         },
         prefill: {
@@ -146,6 +169,44 @@ function Checkout() {
       nav({ to: "/order/$id", params: { id: result.order_id } });
     }
   };
+
+  const confirmUpiPayment = async () => {
+    if (!upiOrder) return;
+    setConfirming(true);
+    try {
+      const res = await fetch("/api/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: upiOrder.id,
+          payment_id: `pay_upi_mock_${Math.random().toString(36).substring(2, 11)}`,
+          payment_status: "paid",
+        }),
+      });
+      if (!res.ok) throw new Error("Webhook failed");
+      toast.success("Payment verified successfully!");
+      setUpiOrder(null);
+      nav({ to: "/order/$id", params: { id: upiOrder.id } });
+    } catch (err) {
+      toast.error("Failed to verify payment. Redirecting to order page.");
+      nav({ to: "/order/$id", params: { id: upiOrder.id } });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const cancelUpiPayment = (id: string) => {
+    toast.info("Payment cancelled. Order saved as pending.");
+    setUpiOrder(null);
+    nav({ to: "/order/$id", params: { id } });
+  };
+
+  const upiLink = upiOrder
+    ? `upi://pay?pa=vaidyaandco@okaxis&pn=Vaidya%20And%20Co&am=${upiOrder.total}&cu=INR&tn=Order%20${upiOrder.id.slice(0, 8)}`
+    : "";
+  const qrUrl = upiLink
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`
+    : "";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 md:px-8">
@@ -196,12 +257,43 @@ function Checkout() {
           </Button>
         </aside>
       </div>
+
+      {upiOrder && (
+        <Dialog open={!!upiOrder} onOpenChange={(open) => !open && cancelUpiPayment(upiOrder.id)}>
+          <DialogContent className="max-w-md sm:rounded-3xl border-border bg-card p-8 text-center shadow-soft">
+            <DialogHeader className="space-y-3">
+              <DialogTitle className="font-display text-2xl text-center font-semibold">Scan to Pay via UPI</DialogTitle>
+              <DialogDescription className="text-center text-sm text-muted-foreground">
+                Scan the QR code using GPay, PhonePe, Paytm, or BHIM to pay <span className="font-semibold text-clay">{inr(upiOrder.total)}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="my-6 flex flex-col items-center justify-center">
+              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+                <img src={qrUrl} alt="UPI QR Code" className="size-48 object-contain" />
+              </div>
+              <div className="mt-4 max-w-full px-3 py-1.5 rounded-lg bg-secondary text-xs text-muted-foreground font-mono truncate select-all">
+                {upiLink}
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-center sm:space-x-0">
+              <Button className="w-full rounded-full" onClick={confirmUpiPayment} disabled={confirming}>
+                {confirming ? "Verifying..." : "Simulate Success (Demo)"}
+              </Button>
+              <Button variant="outline" className="w-full rounded-full" onClick={() => cancelUpiPayment(upiOrder.id)} disabled={confirming}>
+                Cancel & Pay Later
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
+
 function Field({ label, v, on }: { label: string; v: string; on: (v: string) => void }) {
   return <div><Label className="text-xs text-muted-foreground">{label}</Label><Input value={v} onChange={(e) => on(e.target.value)} className="mt-1" /></div>;
 }
+
 function PayOption({ value, id, title, desc, checked }: any) {
   return (
     <label htmlFor={id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${checked ? "border-primary bg-primary/5" : "border-border"}`}>
@@ -210,3 +302,4 @@ function PayOption({ value, id, title, desc, checked }: any) {
     </label>
   );
 }
+

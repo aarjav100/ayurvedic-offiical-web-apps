@@ -22,6 +22,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
+import { Route as ApiWebhookRouteImport } from './routes/api.webhook'
 import { Route as AdminProductsRouteImport } from './routes/admin.products'
 import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminAddProductRouteImport } from './routes/admin.add-product'
@@ -92,6 +93,11 @@ const OrderIdRoute = OrderIdRouteImport.update({
   path: '/order/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhookRoute = ApiWebhookRouteImport.update({
+  id: '/api/webhook',
+  path: '/api/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/admin/add-product': typeof AdminAddProductRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/admin/add-product': typeof AdminAddProductRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/admin/add-product': typeof AdminAddProductRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/admin/add-product'
     | '/admin/orders'
     | '/admin/products'
+    | '/api/webhook'
     | '/order/$id'
     | '/product/$slug'
     | '/admin/'
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/admin/add-product'
     | '/admin/orders'
     | '/admin/products'
+    | '/api/webhook'
     | '/order/$id'
     | '/product/$slug'
     | '/admin'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/admin/add-product'
     | '/admin/orders'
     | '/admin/products'
+    | '/api/webhook'
     | '/order/$id'
     | '/product/$slug'
     | '/admin/'
@@ -240,6 +252,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   LoginRoute: typeof LoginRoute
   ShopRoute: typeof ShopRoute
+  ApiWebhookRoute: typeof ApiWebhookRoute
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
 }
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhook': {
+      id: '/api/webhook'
+      path: '/api/webhook'
+      fullPath: '/api/webhook'
+      preLoaderRoute: typeof ApiWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/products': {
       id: '/admin/products'
       path: '/products'
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   LoginRoute: LoginRoute,
   ShopRoute: ShopRoute,
+  ApiWebhookRoute: ApiWebhookRoute,
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,
 }

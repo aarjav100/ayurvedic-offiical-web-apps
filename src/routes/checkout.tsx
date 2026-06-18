@@ -260,29 +260,29 @@ function Checkout() {
 
       {upiOrder && (
         <Dialog open={!!upiOrder} onOpenChange={(open) => !open && cancelUpiPayment(upiOrder.id)}>
-          <DialogContent className="max-w-md sm:rounded-3xl border-border bg-card p-8 text-center shadow-soft">
+          <DialogContent className="w-[90vw] max-w-md sm:rounded-3xl border border-border bg-card p-8 text-center shadow-soft">
             <DialogHeader className="space-y-3">
               <DialogTitle className="font-display text-2xl text-center font-semibold">Scan to Pay via UPI</DialogTitle>
               <DialogDescription className="text-center text-sm text-muted-foreground">
                 Scan the QR code using GPay, PhonePe, Paytm, or BHIM to pay <span className="font-semibold text-clay">{inr(upiOrder.total)}</span>.
               </DialogDescription>
             </DialogHeader>
-            <div className="my-6 flex flex-col items-center justify-center">
+            <div className="my-6 flex flex-col items-center justify-center w-full">
               <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
                 <img src={qrUrl} alt="UPI QR Code" className="size-48 object-contain" />
               </div>
-              <div className="mt-4 max-w-full px-3 py-1.5 rounded-lg bg-secondary text-xs text-muted-foreground font-mono truncate select-all">
+              <div className="mt-4 w-full max-w-[280px] px-3 py-1.5 rounded-lg bg-secondary text-xs text-muted-foreground font-mono truncate select-all text-center mx-auto">
                 {upiLink}
               </div>
             </div>
-            <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-center sm:space-x-0">
+            <div className="flex flex-col gap-2 w-full">
               <Button className="w-full rounded-full" onClick={confirmUpiPayment} disabled={confirming}>
                 {confirming ? "Verifying..." : "Simulate Success (Demo)"}
               </Button>
               <Button variant="outline" className="w-full rounded-full" onClick={() => cancelUpiPayment(upiOrder.id)} disabled={confirming}>
                 Cancel & Pay Later
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       )}

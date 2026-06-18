@@ -6,8 +6,27 @@ import type { Database } from './types'
 
 
 
-export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
-  async ({ next }) => {
+export const requireSupabaseAuth = createMiddleware({ type: 'function' })
+  .client(async ({ next }) => {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      if (token) {
+        return next({
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch (e) {
+      console.error('[AuthMiddleware] Error fetching client session:', e);
+    }
+    return next();
+  })
+  .server(
+    async ({ next }) => {
     
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
